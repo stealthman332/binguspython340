@@ -79,6 +79,50 @@ def draw_intro(surface):
              WINDOW_HEIGHT // 2 + 150),
         )
 
+prev_ball_x =  game_ball.x_pos
+prev_ball_y = game_ball.y_pos
+
+##################################################################################################
+def resolve_ball_paddle_collision(ball, prev_x, prev_y, paddle_rect):
+    ball_rect = pygame.Rect(
+            ball.x_pos - ball.radius,
+            ball.y_pos - ball.radius,
+            ball.radius * 2,
+            ball.radius * 2,
+        )
+    if not paddle_rect.colliderect(ball_rect):
+        return
+    
+    prev_rect = pygame.Rect(
+            prev_x - ball.radius,
+            prev_y - ball.radius,
+            ball.radius * 2,
+            ball.radius * 2,
+        )
+    
+    was_left = prev_rect.right <= paddle_rect.left
+    was_right = prev_rect.left >= paddle_rect.right
+    was_above= prev_rect.bottom <= paddle_rect.top
+    was_below = prev_rect.top >= paddle_rect.bottom
+
+    if was_above:
+        ball.y_pos = paddle_rect.top -ball.radius
+        ball.y_vel *= -1
+    elif was_below:
+        ball.y_pos = paddle_rect.bottom + ball.radius
+        ball.y_vel *= -1
+    elif was_left:
+        ball.x_pos = paddle_rect.left - ball.radius
+        ball.x_vel *= -1
+    elif was_right:
+        ball.x_pos = paddle_rect.right + ball.radius
+        ball.x_vel *= -1
+    else:
+        if ball.y_vel > 0:
+            ball.y_pos = paddle_rect.top - ball.radius
+        else:
+            ball.y_pos = paddle_rect.bottom + ball.radius
+        ball.y_vel *= -1
 
 ##################################################################################################
 # main game loop
@@ -107,6 +151,9 @@ while running:
             (WINDOW_WIDTH - 200, WINDOW_HEIGHT),
             5,
         )
+
+        prev_ball_x =  game_ball.x_pos
+        prev_ball_y = game_ball.y_pos
 
         # ball
         game_ball.move(dt)
@@ -142,9 +189,7 @@ while running:
         player1Paddle.draw(display_surface)
 
         # ball–paddle 1
-        if player1Paddle.rect.colliderect(ball_rect):
-            game_ball.y_pos = player1Paddle.rect.top - game_ball.radius
-            game_ball.y_vel *= -1
+        resolve_ball_paddle_collision(game_ball, prev_ball_x, prev_ball_y, player1Paddle.rect)
 
         # paddle 1 bounds
         if player1Paddle.rect.left <= 0:
@@ -173,9 +218,7 @@ while running:
         player2Paddle.draw(display_surface)
 
         # ball–paddle 2
-        if player2Paddle.rect.colliderect(ball_rect):
-            game_ball.y_pos = player2Paddle.rect.bottom + game_ball.radius
-            game_ball.y_vel *= -1
+        resolve_ball_paddle_collision(game_ball, prev_ball_x, prev_ball_y, player2Paddle.rect)
 
         # ball bounds (circle)
         # vertical
