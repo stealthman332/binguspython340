@@ -126,7 +126,7 @@ while running:
 
     #draws the background
     display_surface.fill((10, 15, 40))
-
+ 
     #displays the intro
     if game_state == "intro" :
         #creates the font variables
