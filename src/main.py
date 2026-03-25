@@ -49,8 +49,8 @@ players_money = 0
 ##################################################################################################
 #brick handling
 
-BRICK_WIDTH = 80
-BRICK_HEIGHT = 30
+BRICK_WIDTH = 70
+BRICK_HEIGHT = 25
 BRICK_COLOR = "lightgreen"
 
 #brick patterns
@@ -58,7 +58,7 @@ BRICK_COLOR = "lightgreen"
 LEVELS = [
 #lvlzero
     ["111111","111111"],
-#lvone
+#lvlone
     ["111010", "101010"],
 #lvltwo
     ["010101", "111100"],
@@ -66,6 +66,10 @@ LEVELS = [
 
 level_index = 0
 bricks = []
+
+
+
+
 
 ##################################################################################################
 
@@ -100,14 +104,14 @@ prev_ball_x =  game_ball.x_pos
 prev_ball_y = game_ball.y_pos
 
 ##################################################################################################
-def resolve_ball_paddle_collision(ball, prev_x, prev_y, paddle_rect):
+def resolve_ball_to_rect_collision(ball, prev_x, prev_y, collision_rect):
     ball_rect = pygame.Rect(
             ball.x_pos - ball.radius,
             ball.y_pos - ball.radius,
             ball.radius * 2,
             ball.radius * 2,
         )
-    if not paddle_rect.colliderect(ball_rect):
+    if not collision_rect.colliderect(ball_rect):
         return
     
     prev_rect = pygame.Rect(
@@ -117,49 +121,51 @@ def resolve_ball_paddle_collision(ball, prev_x, prev_y, paddle_rect):
             ball.radius * 2,
         )
     
-    was_left = prev_rect.right <= paddle_rect.left
-    was_right = prev_rect.left >= paddle_rect.right
-    was_above= prev_rect.bottom <= paddle_rect.top
-    was_below = prev_rect.top >= paddle_rect.bottom
+    was_left = prev_rect.right <= collision_rect.left
+    was_right = prev_rect.left >= collision_rect.right
+    was_above= prev_rect.bottom <= collision_rect.top
+    was_below = prev_rect.top >= collision_rect.bottom
 
     if was_above:
-        ball.y_pos = paddle_rect.top -ball.radius
+        ball.y_pos = collision_rect.top -ball.radius
         ball.y_vel *= -1
     elif was_below:
-        ball.y_pos = paddle_rect.bottom + ball.radius
+        ball.y_pos = collision_rect.bottom + ball.radius
         ball.y_vel *= -1
     elif was_left:
-        ball.x_pos = paddle_rect.left - ball.radius
+        ball.x_pos = collision_rect.left - ball.radius
         ball.x_vel *= -1
     elif was_right:
-        ball.x_pos = paddle_rect.right + ball.radius
+        ball.x_pos = collision_rect.right + ball.radius
         ball.x_vel *= -1
     else:
         if ball.y_vel > 0:
-            ball.y_pos = paddle_rect.top - ball.radius
+            ball.y_pos = collision_rect.top - ball.radius
         else:
-            ball.y_pos = paddle_rect.bottom + ball.radius
+            ball.y_pos = collision_rect.bottom + ball.radius
         ball.y_vel *= -1
-
 ##################################################################################################
 def build_level(level_index):
     global bricks
     bricks = []
-    layout = LEVELS[level_index]
+    layout = LEVELS[level_index %  len(LEVELS)]
 
     start_x = 300
     start_y = 350
     padding = 10
 
-    for row_index, row in enumerate(layout):
-        for col_index, cell in enumerate(row):
-            if cell == "1":
-                x = start_x + col_index * (BRICK_WIDTH + padding)
-                y = start_y + row_index * (BRICK_HEIGHT + padding)
-                rect = pygame.Rect(x, y, BRICK_WIDTH, BRICK_HEIGHT)
-                bricks.append(rect)
+    level_number = level_index + 1
+    health_scale = 1 + 0.5 * level_number
 
-
+    for row_i, row in enumerate(layout):
+        for col_i, ch in enumerate(row):
+            if ch != "0":
+                base = int(ch)
+                max_health = int(base * health_scale)
+                x = start_x + col_i * (BRICK_WIDTH + padding)
+                y = start_y + row_i * (BRICK_HEIGHT + padding)
+                brick = Brick(x, y, BRICK_WIDTH, BRICK_HEIGHT, color="white", max_health=max_health)
+                bricks.append(brick)
 ##################################################################################################
 
 build_level(level_index)
@@ -197,9 +203,9 @@ while running:
         game_ball.move(dt)
         game_ball.draw(display_surface, "cyan")
 
-        # brick
+        # Draw brick layout
         for brick in bricks:
-            pygame.draw.rect(display_surface, BRICK_COLOR, brick)
+            brick.draw(display_surface, font)
         
 
         # create ball rect for collisions
@@ -228,7 +234,7 @@ while running:
         player1Paddle.draw(display_surface)
 
         # ball–paddle 1
-        resolve_ball_paddle_collision(game_ball, prev_ball_x, prev_ball_y, player1Paddle.rect)
+        resolve_ball_to_rect_collision(game_ball, prev_ball_x, prev_ball_y, player1Paddle.rect)
 
         # paddle 1 bounds
         if player1Paddle.rect.left <= 0:
@@ -257,7 +263,7 @@ while running:
         player2Paddle.draw(display_surface)
 
         # ball–paddle 2
-        resolve_ball_paddle_collision(game_ball, prev_ball_x, prev_ball_y, player2Paddle.rect)
+        resolve_ball_to_rect_collision(game_ball, prev_ball_x, prev_ball_y, player2Paddle.rect)
 
         # ball bounds (circle)
         # vertical
@@ -287,17 +293,22 @@ while running:
         # brick hit
         hit_bricks = []
         for brick in bricks:
-            if ball_rect.colliderect(brick):
+            if ball_rect.colliderect(brick.rect):
+                resolve_ball_to_rect_collision(game_ball, prev_ball_x, prev_ball_y, brick.rect)
                 hit_bricks.append(brick)
+
         for brick in hit_bricks:
-            bricks.remove(brick )
-            game_ball.y_vel *= -1
+            brick.take_damage(game_ball.power)
+            
+            print(brick.is_dead())
+            if brick.is_dead():
+                bricks.remove(brick)
             players_money += 10
     
         #check end of level
         if not bricks:
             level_index += 1
-            if level_index > len(LEVELS):
+            if level_index >= len(LEVELS):
                 level_index = 0
             build_level(level_index)
             
