@@ -39,16 +39,33 @@ player2Paddle = Paddle(450, WINDOW_HEIGHT - 100, 100, 25, "violet", player2_cont
 # ball
 game_ball = Ball(10, WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, 200, 200)
 
-# brick (plain rect for now)
-defaultBrick = pygame.Rect(300, 600, 20, 10)
-brickDestroyed = False
-
 # lasers
 player1_lasers = []
 player2_lasers = []
 
 # money
 players_money = 0
+
+##################################################################################################
+#brick handling
+
+BRICK_WIDTH = 80
+BRICK_HEIGHT = 30
+BRICK_COLOR = "lightgreen"
+
+#brick patterns
+
+LEVELS = [
+#lvlzero
+    ["111111","111111"],
+#lvone
+    ["111010", "101010"],
+#lvltwo
+    ["010101", "111100"],
+]
+
+level_index = 0
+bricks = []
 
 ##################################################################################################
 
@@ -125,6 +142,27 @@ def resolve_ball_paddle_collision(ball, prev_x, prev_y, paddle_rect):
         ball.y_vel *= -1
 
 ##################################################################################################
+def build_level(level_index):
+    global bricks
+    bricks = []
+    layout = LEVELS[level_index]
+
+    start_x = 300
+    start_y = 350
+    padding = 10
+
+    for row_index, row in enumerate(layout):
+        for col_index, cell in enumerate(row):
+            if cell == "1":
+                x = start_x + col_index * (BRICK_WIDTH + padding)
+                y = start_y + row_index * (BRICK_HEIGHT + padding)
+                rect = pygame.Rect(x, y, BRICK_WIDTH, BRICK_HEIGHT)
+                bricks.append(rect)
+
+
+##################################################################################################
+
+build_level(level_index)
 # main game loop
 while running:
     for event in pygame.event.get():
@@ -160,8 +198,9 @@ while running:
         game_ball.draw(display_surface, "cyan")
 
         # brick
-        if not brickDestroyed:
-            pygame.draw.rect(display_surface, "hotpink", defaultBrick)
+        for brick in bricks:
+            pygame.draw.rect(display_surface, BRICK_COLOR, brick)
+        
 
         # create ball rect for collisions
         ball_rect = pygame.Rect(
@@ -246,9 +285,22 @@ while running:
             player2Paddle.x_pos = WINDOW_WIDTH - 200 - player2Paddle.rect.width
 
         # brick hit
-        if ball_rect.colliderect(defaultBrick) and not brickDestroyed:
-            brickDestroyed = True
+        hit_bricks = []
+        for brick in bricks:
+            if ball_rect.colliderect(brick):
+                hit_bricks.append(brick)
+        for brick in hit_bricks:
+            bricks.remove(brick )
             game_ball.y_vel *= -1
+            players_money += 10
+    
+        #check end of level
+        if not bricks:
+            level_index += 1
+            if level_index > len(LEVELS):
+                level_index = 0
+            build_level(level_index)
+            
 
     pygame.display.flip()
     dt = clock.tick(60) / 1000
