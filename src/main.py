@@ -46,6 +46,10 @@ extra_balls = []
 player1_lasers = []
 player2_lasers = []
 
+#players score
+player1_score = 0
+player2_score = 0
+
 #laser cooldowns
 player1_laser_cooldown = 0
 player2_laser_cooldown = 0
@@ -69,9 +73,18 @@ LEVELS = [
     ["111010", "101010"],
 #lvltwo
     ["010101", "111100"],
+#lvlthree DENSE
+    ["010101", "111100", "211112"],
+#lvlfour X
+    ["100001", "020020", "112211", "020020", "100001"],
+#lvlFive
+    ["010101", "010101", "010101", "010101"],
+#BoSS level
+    ["111111", "122221", "123321", "123321", "122221", "111111"]
 ]
 
 level_index = 0
+level_number = 1
 bricks = []
 
 #upgrade menu
@@ -200,16 +213,19 @@ def resolve_ball_to_rect_collision(ball, prev_x, prev_y, collision_rect):
         ball.y_vel *= -1
 ##################################################################################################
 def build_level(level_index):
-    global bricks
+    global bricks, level_number
     bricks = []
-    layout = LEVELS[level_index %  len(LEVELS)]
-
+    try:
+        layout = LEVELS[level_index %  len(LEVELS)]
+    except IndexError:
+        print("Level index out of range. Defaulting to level one.")
+        layout = LEVELS[0]
     start_x = 300
     start_y = 350
     padding = 10
 
     level_number = level_index + 1
-    health_scale = 1 + 0.5 * level_number
+    health_scale = 1 + (2 * level_number)
 
     for row_i, row in enumerate(layout):
         for col_i, ch in enumerate(row):
@@ -220,6 +236,26 @@ def build_level(level_index):
                 y = start_y + row_i * (BRICK_HEIGHT + padding)
                 brick = Brick(x, y, BRICK_WIDTH, BRICK_HEIGHT, color="white", max_health=max_health)
                 bricks.append(brick)
+
+##################################################################################################
+
+def draw_win_screen(surface, score1, score2):
+    big_font = pygame.font.SysFont(None, 150)
+    med_font = pygame.font.SysFont(None, 50)
+    small_font = pygame.font.SysFont(None, 25)
+
+    title = big_font.render("YOU WON!", True, "Cyan")
+    surface.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 80))
+
+    winner = "Player 1" if score1 > score2 else "Player 2" if score2 > score1 else "Tie"
+    winner_text = med_font.render(f"{winner} Wins!" if winner != "Tie" else "It's a Tie!", True, "White")
+    surface.blit(winner_text, (WINDOW_WIDTH // 2 - winner_text.get_width() // 2, 220))
+
+    p1 = med_font.render(f"Player 1 Score: {score1}", True, "pink")
+    p2 = med_font.render(f"Player 2 Score: {score2}", True, "violet")
+    surface.blit(p1, (WINDOW_WIDTH // 2 - p1.get_width() // 2, 340))
+    surface.blit(p2, (WINDOW_WIDTH // 2 - p2.get_width() // 2, 420))
+
 ##################################################################################################
 
 def apply_upgrades(key, level):
@@ -231,7 +267,7 @@ def apply_upgrades(key, level):
         pass
     elif key == "multi_ball":
         from objects import Ball
-        new_ball = Ball(10, game_ball.x_pos, game_ball.y_pos, -game_ball.x_vel, game_ball.y_vel)
+        new_ball = Ball(10, game_ball.x_pos-10, game_ball.y_pos+10, -game_ball.x_vel, -game_ball.y_vel)
         extra_balls.append(new_ball)
                 
 ##################################################################################################
@@ -262,10 +298,15 @@ while running:
     if game_state == "intro":
         draw_intro(display_surface)
 
+    elif game_state == "win":
+        draw_win_screen(display_surface, player1_score, player2_score)
+
     elif game_state == "playing":
         # UI
-        p_text = font.render(f"Money: {players_money}", True, "white")
-        display_surface.blit(p_text, (20, 20))
+        p1_text = font.render("Money:", True, "white")
+        p2_text = font.render(f"${players_money}", True, "White")
+        display_surface.blit(p1_text, (WINDOW_WIDTH-160, WINDOW_HEIGHT-250))
+        display_surface.blit(p2_text, (WINDOW_WIDTH-130, WINDOW_HEIGHT-200))
         pygame.draw.line(
             display_surface,
             "cyan",
@@ -273,6 +314,11 @@ while running:
             (WINDOW_WIDTH - 200, WINDOW_HEIGHT),
             5,
         )
+
+        #display level infor
+        font = pygame.font.SysFont(None, 55)
+        level_text = font.render(f"LEVEL: {level_number}", True, "White")
+        display_surface.blit(level_text, (20, 20))
 
         prev_ball_x =  game_ball.x_pos
         prev_ball_y = game_ball.y_pos
@@ -332,10 +378,12 @@ while running:
             game_ball.radius * 2,
         )
 
-        # PLAYER 1
+
+
+        # PLAYER 1 #######################################################################
         #implements the upgardes
         base_cooldown = 1
-        laser_cooldown_time = max(.1, base_cooldown- upgrades["laser_cooldown"]["level"] * .15)
+        laser_cooldown_time = max(.1, base_cooldown- upgrades["laser_cooldown"]["level"] * .25)
         laser_dmg = 1 + upgrades["laser_damage"]["level"]
 
         shot1 = player1Paddle.inputs(dt)
@@ -368,7 +416,7 @@ while running:
             player1Paddle.rect.right = WINDOW_WIDTH - 200
             player1Paddle.x_pos = WINDOW_WIDTH - 200 - player1Paddle.rect.width
 
-        # PLAYER 2
+        # PLAYER 2 ########################################################################################
         shot2 = player2Paddle.inputs(dt)
         player2_laser_cooldown = max(0, player2_laser_cooldown-dt) # countdown
 
@@ -443,6 +491,7 @@ while running:
                     if brick.is_dead():
                         bricks.remove(brick)
                         players_money += 10
+                        player1_score += 1
                     break #one brick per laser
         player1_lasers = [l for l in player1_lasers if l not in lasers_to_remove]
         #laser collision section
@@ -451,11 +500,12 @@ while running:
         for laser in player2_lasers:
             for brick in bricks[:]: #copy to remove bricks safely
                 if laser.rect.colliderect(brick.rect): #checks if the laser collides with the brick
-                    brick.take_damage(1)
+                    brick.take_damage(laser_dmg)
                     lasers_to_remove.append(laser)
                     if brick.is_dead():
                         bricks.remove(brick)
                         players_money += 10
+                        player2_score += 1
                     break #one brick per laser
         player2_lasers = [l for l in player2_lasers if l not in lasers_to_remove]
 
@@ -468,8 +518,9 @@ while running:
         if not bricks:
             level_index += 1
             if level_index >= len(LEVELS):
-                level_index = 0
-            build_level(level_index)
+                game_state = "win"
+            else:
+                build_level(level_index)
             
 
     pygame.display.flip()
