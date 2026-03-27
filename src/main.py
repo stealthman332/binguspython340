@@ -43,6 +43,10 @@ game_ball = Ball(10, WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, 200, 200)
 player1_lasers = []
 player2_lasers = []
 
+#laser cooldowns
+player1_laser_cooldown = 0
+player2_laser_cooldown = 0
+
 # money
 players_money = 0
 
@@ -218,16 +222,19 @@ while running:
 
         # PLAYER 1
         shot1 = player1Paddle.inputs(dt)
-        if shot1:
+        player1_laser_cooldown = max(0, player1_laser_cooldown-dt) # countdown
+        if shot1 and player1_laser_cooldown == 0:
             x1 = player1Paddle.rect.centerx - 2
-            y1 = player1Paddle.rect.top - 12
+            y1 = player1Paddle.rect.top + 12
             player1_lasers.append(
-                Laser(x1, y1, length=4, width=12, color="red", speed=-600)
+                Laser(x1, y1, length=4, width=12, color="red", speed=+600)
             )
+            player1_laser_cooldown = 1
+
 
         for laser in player1_lasers:
             laser.update(dt)
-        player1_lasers = [laser for laser in player1_lasers if laser.rect.bottom > 0]
+        player1_lasers = [laser for laser in player1_lasers if laser.rect.top < WINDOW_HEIGHT]
         for laser in player1_lasers:
             laser.draw(display_surface)
 
@@ -246,12 +253,15 @@ while running:
 
         # PLAYER 2
         shot2 = player2Paddle.inputs(dt)
-        if shot2:
+        player2_laser_cooldown = max(0, player2_laser_cooldown-dt) # countdown
+
+        if shot2 and player2_laser_cooldown == 0:
             x2 = player2Paddle.rect.centerx - 2
             y2 = player2Paddle.rect.top - 12
             player2_lasers.append(
                 Laser(x2, y2, length=4, width=12, color="red", speed=-600)
             )
+            player2_laser_cooldown = 1 #cooldown, once it has been shot it has a one second cooldwon
 
         for laser in player2_lasers:
             laser.update(dt)
@@ -304,6 +314,38 @@ while running:
             if brick.is_dead():
                 bricks.remove(brick)
             players_money += 10
+
+        #laser collision section
+        lasers_to_remove = []
+        #loops through every laser
+        for laser in player1_lasers:
+            for brick in bricks[:]: #copy to remove bricks safely
+                if laser.rect.colliderect(brick.rect): #checks if the laser collides with the brick
+                    brick.take_damage(1)
+                    lasers_to_remove.append(laser)
+                    if brick.is_dead():
+                        bricks.remove(brick)
+                        players_money += 10
+                    break #one brick per laser
+        player1_lasers = [l for l in player1_lasers if l not in lasers_to_remove]
+        #laser collision section
+        lasers_to_remove = []
+        #loops through every laser
+        for laser in player2_lasers:
+            for brick in bricks[:]: #copy to remove bricks safely
+                if laser.rect.colliderect(brick.rect): #checks if the laser collides with the brick
+                    brick.take_damage(1)
+                    lasers_to_remove.append(laser)
+                    if brick.is_dead():
+                        bricks.remove(brick)
+                        players_money += 10
+                    break #one brick per laser
+        player2_lasers = [l for l in player2_lasers if l not in lasers_to_remove]
+
+
+
+
+
     
         #check end of level
         if not bricks:
