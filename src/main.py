@@ -39,6 +39,9 @@ player2Paddle = Paddle(450, WINDOW_HEIGHT - 100, 100, 25, "violet", player2_cont
 # ball
 game_ball = Ball(10, WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, 200, 200)
 
+#list for extra balls from upgrades
+extra_balls = []
+
 # lasers
 player1_lasers = []
 player2_lasers = []
@@ -71,7 +74,54 @@ LEVELS = [
 level_index = 0
 bricks = []
 
+#upgrade menu
+upgrades = {
+    "laser_cooldown": {"label": "Laser Speed", "cost" : 50, "level" : 0, "max" : 5},
+    "multi_ball": {"label": "Add Balls", "cost" : 100, "level" : 0, "max" : 5},
+    "laser_damage": {"label": "Laser Damage", "cost" : 75, "level" : 0, "max" : 5}
+}
+upgrade_buttons = []
 
+##################################################################################################
+
+def draw_upgrade_panel(surface, money, upgrades, font):
+    panel_x = WINDOW_WIDTH - 195
+    button_height = 60
+    padding = 10
+    small_font = pygame.font.SysFont(None, 25)
+    title_font = pygame.font.SysFont(None, 35)
+
+    title = title_font.render("UPGRADES", True, "Cyan") #creates and blits the title
+    surface.blit(title, (panel_x + 10, 10))
+
+    buttons = []
+    for i, (key, upg) in enumerate(upgrades.items()) :
+        y = 80 + i * (button_height + padding) #first button 80, each button is scaled downward
+        rect = pygame.Rect(panel_x + 5, y, 185, button_height)
+
+        #button color based on affordability
+        if upg["level"] >= upg["max"]:
+            color = (60, 60, 60) #maxed out color
+        elif money >= upg["cost"]:
+            color = (30, 80, 30)
+        else:
+            color = (80, 30, 30)
+        
+        pygame.draw.rect(surface, color, rect, border_radius=6)
+        pygame.draw.rect(surface, "cyan", rect, 1, border_radius=6)
+
+        label = small_font.render(upg["label"], True, "White")
+        surface.blit(label, (rect.x + 8, rect.y + 8))
+
+        if upg["level"] >= upg["max"]:
+            sub = small_font.render("MAXED", True, "Yellow")
+        else: 
+            sub = small_font.render(f"Cost: ${upg['cost']}", True, "Lightgray")
+        surface.blit(sub, (rect.x +8, rect.y + 32))
+
+        buttons.append((rect,key))
+    
+    return buttons
 
 
 
@@ -172,6 +222,20 @@ def build_level(level_index):
                 bricks.append(brick)
 ##################################################################################################
 
+def apply_upgrades(key, level):
+    global game_ball
+    #both are handled below
+    if key == "laser_cooldown":
+        pass
+    elif key == "laser_damage":
+        pass
+    elif key == "multi_ball":
+        from objects import Ball
+        new_ball = Ball(10, game_ball.x_pos, game_ball.y_pos, -game_ball.x_vel, game_ball.y_vel)
+        extra_balls.append(new_ball)
+                
+##################################################################################################
+
 build_level(level_index)
 # main game loop
 while running:
@@ -181,6 +245,16 @@ while running:
 
         if game_state == "intro" and event.type == pygame.KEYDOWN:
             game_state = "playing"
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button ==  1:
+            for rect, key in upgrade_buttons:
+                if rect.collidepoint(event.pos):
+                    upg = upgrades[key]
+                    if players_money >= upg["cost"] and upg["level"] < upg["max"]:
+                        players_money -= upg["cost"]
+                        upg["level"] += 1
+                        upg["cost"] = int(upg["cost"] * 1.25) #scales the cost
+                        apply_upgrades(key, upg["level"])
 
     # background
     display_surface.fill((10, 15, 40))
@@ -203,13 +277,51 @@ while running:
         prev_ball_x =  game_ball.x_pos
         prev_ball_y = game_ball.y_pos
 
+
         # ball
         game_ball.move(dt)
         game_ball.draw(display_surface, "cyan")
 
+        #adds extra balls
+        for ball in extra_balls:
+            ball.move(dt)
+            ball.draw(display_surface, "cyan")
+
+            #bounds checking for extra balls
+            if ball.y_pos - ball.radius <= 0:
+                ball.y_pos = ball.radius
+                ball.y_vel *= -1
+            if ball.y_pos + ball.radius >= WINDOW_HEIGHT:
+                ball.y_pos = WINDOW_HEIGHT - ball.radius
+                ball.y_vel *= -1
+
+            # horizontal
+            if ball.x_pos - ball.radius <= 0:
+                ball.x_pos = ball.radius
+                ball.x_vel *= -1
+            if ball.x_pos + ball.radius >= WINDOW_WIDTH - 200:
+                ball.x_pos = WINDOW_WIDTH - 200 - ball.radius
+                ball.x_vel *= -1
+
+            resolve_ball_to_rect_collision(ball, prev_ball_x, prev_ball_y, player2Paddle.rect)
+            resolve_ball_to_rect_collision(ball, prev_ball_x, prev_ball_y, player2Paddle.rect)
+            for brick in bricks[:]:
+                extra_ball_rect = pygame.Rect(
+                    ball.x_pos - ball.radius, ball.y_pos - ball.radius, ball.radius * 2, ball.radius * 2
+                )
+                if extra_ball_rect.colliderect(brick.rect):
+                    resolve_ball_to_rect_collision(ball, ball.x_pos, ball.y_pos, brick.rect)
+                    brick.take_damage(game_ball.power)
+                    if brick.is_dead():
+                        bricks.remove(brick)
+                        players_money += 10
+
         # Draw brick layout
         for brick in bricks:
             brick.draw(display_surface, font)
+
+        #draw upgarde menu UI
+        upgrade_buttons = draw_upgrade_panel(display_surface, players_money, upgrades, font)
         
 
         # create ball rect for collisions
@@ -221,6 +333,11 @@ while running:
         )
 
         # PLAYER 1
+        #implements the upgardes
+        base_cooldown = 1
+        laser_cooldown_time = max(.1, base_cooldown- upgrades["laser_cooldown"]["level"] * .15)
+        laser_dmg = 1 + upgrades["laser_damage"]["level"]
+
         shot1 = player1Paddle.inputs(dt)
         player1_laser_cooldown = max(0, player1_laser_cooldown-dt) # countdown
         if shot1 and player1_laser_cooldown == 0:
@@ -229,7 +346,7 @@ while running:
             player1_lasers.append(
                 Laser(x1, y1, length=4, width=12, color="red", speed=+600)
             )
-            player1_laser_cooldown = 1
+            player1_laser_cooldown = laser_cooldown_time
 
 
         for laser in player1_lasers:
@@ -261,7 +378,7 @@ while running:
             player2_lasers.append(
                 Laser(x2, y2, length=4, width=12, color="red", speed=-600)
             )
-            player2_laser_cooldown = 1 #cooldown, once it has been shot it has a one second cooldwon
+            player2_laser_cooldown = laser_cooldown_time #cooldown, once it has been shot it has a one second cooldwon
 
         for laser in player2_lasers:
             laser.update(dt)
@@ -321,7 +438,7 @@ while running:
         for laser in player1_lasers:
             for brick in bricks[:]: #copy to remove bricks safely
                 if laser.rect.colliderect(brick.rect): #checks if the laser collides with the brick
-                    brick.take_damage(1)
+                    brick.take_damage(laser_dmg)
                     lasers_to_remove.append(laser)
                     if brick.is_dead():
                         bricks.remove(brick)
